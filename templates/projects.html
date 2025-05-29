@@ -1,13 +1,33 @@
-<!doctype html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport"
-          content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
-    <meta http-equiv="X-UA-Compatible" content="ie=edge">
-    <title>Проекты</title>
-</head>
-<body>
+{% extends "base.html" %}
+
+{% block title %}Проекты{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <h2 class="mb-4">Список проектов</h2>
+
+    {% if projects %}
+        <ul class="list-group mb-4">
+            {% for project in projects %}
+                <li class="list-group-item">
+                    {{ project.title }}
+                </li>
+            {% endfor %}
+        </ul>
+    {% else %}
+        <p class="text-muted">Проекты не найдены.</p>
+    {% endif %}
+
+    {% if current_user.role_id == 1 %}
+        <a href="{{ url_for('assign_project') }}" class="btn btn-primary">Назначить пользователя на проект</a>
+    {% endif %}
+
+    <div class="mt-4">
+        <a href="{{ url_for('profile') }}" class="btn btn-secondary">Вернуться в профиль</a>
+    </div>
+</div>
+{% endblock %}
+
 
 </body>
 </html>

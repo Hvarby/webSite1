@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+
+{% block title %}Название страницы{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <h2 class="mb-4">Управление подчинённостью</h2>
+
+    <form method="POST">
+        {{ form.hidden_tag() }}
+        <div class="mb-3">
+            {{ form.subordinate_id.label(class="form-label") }}
+            {{ form.subordinate_id(class="form-select") }}
+        </div>
+        <div class="mb-3">
+            {{ form.manager_id.label(class="form-label") }}
+            {{ form.manager_id(class="form-select") }}
+        </div>
+        <div class="mb-3">
+            {{ form.submit(class="btn btn-primary") }}
+        </div>
+    </form>
+
+    <h4 class="mt-5">Список сотрудников и их руководителей</h4>
+    <ul class="list-group">
+        {% for user in users %}
+            <li class="list-group-item">
+                {{ user.name }} —
+                {% if user.manager %}
+                    подчиняется {{ user.manager.name }}
+                {% else %}
+                    <span class="text-muted">не назначен руководитель</span>
+                {% endif %}
+            </li>
+        {% endfor %}
+    </ul>
+</div>
+{% endblock %}

@@ -1,4 +1,4 @@
-from flask import render_template, redirect, url_for, request
+from flask import render_template, redirect, url_for, request, abort
 from flask_login import login_user, logout_user, login_required, current_user
 from models import db
 from models.user import User
@@ -10,20 +10,25 @@ from forms.login_form import LoginForm
 from forms.register_form import RegisterForm
 from forms.edit_profile_form import EditProfileForm
 from forms.assign_project_form import AssignProjectForm
-from flask_bcrypt import Bcrypt
-bcrypt = Bcrypt
+from forms.assign_manager_form import AssignManagerForm
+from log_action import log_action
+from __init__ import bcrypt
 
 def register_routes(app):
 
     @app.route('/login', methods=['GET', 'POST'])
     def login():
         form = LoginForm()
+        error = None
         if form.validate_on_submit():
             user = User.query.filter_by(email=form.email.data).first()
             if user and bcrypt.check_password_hash(user.password_hash, form.password.data):
                 login_user(user)
+                log_action("Пользователь вошёл в систему")
                 return redirect(url_for('profile'))
-        return render_template('login.html', form=form)
+            else:
+                error = "Неверный логин или пароль."
+        return render_template('login.html', form=form, error=error)
 
     @app.route('/logout')
     @login_required
@@ -45,7 +50,8 @@ def register_routes(app):
     @app.route('/profile')
     @login_required
     def profile():
-        return render_template('profile.html', user=current_user)
+        user_projects = [relation.project for relation in current_user.user_projects]
+        return render_template('profile.html', user=current_user, projects=user_projects)
 
     @app.route('/edit_profile', methods=['GET', 'POST'])
     @login_required
@@ -79,13 +85,34 @@ def register_routes(app):
     @app.route('/admin/users')
     @login_required
     def admin_users():
+        if current_user.role_id != 1:
+            abort(403)  # Запрет доступа, если пользователь не админ
         users = User.query.all()
         return render_template('admin_users.html', users=users)
 
     @app.route('/admin/logs')
     @login_required
     def admin_logs():
+        if current_user.role_id != 1:
+            abort(403)  # Запрет доступа, если пользователь не админ
         logs = Log.query.order_by(Log.timestamp.desc()).all()
         return render_template('admin_logs.html', logs=logs)
 
-print("Маршруты загружены")
+    @app.route('/admin/hierarchy', methods=['GET', 'POST'])
+    @login_required
+    def manage_hierarchy():
+        if current_user.role_id != 1:
+            return redirect(url_for('profile'))
+
+        form = AssignManagerForm()
+        form.subordinate_id.choices = [(u.id, u.name) for u in User.query.filter(User.role_id > 1).all()]
+        form.manager_id.choices = [(u.id, u.name) for u in User.query.filter(User.role_id < 4).all()]
+
+        if form.validate_on_submit():
+            subordinate = User.query.get(form.subordinate_id.data)
+            subordinate.manager_id = form.manager_id.data
+            db.session.commit()
+            return redirect(url_for('manage_hierarchy'))
+
+        users = User.query.filter(User.role_id > 1).all()
+        return render_template('hierarchy.html', users=users, form=form)

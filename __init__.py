@@ -2,7 +2,9 @@ from flask import Flask
 from flask_login import LoginManager
 from config import Config
 from models import db
+from flask_bcrypt import Bcrypt
 
+bcrypt = Bcrypt()
 login = LoginManager()
 login.login_view = 'login'
 
