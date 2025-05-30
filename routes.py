@@ -72,14 +72,23 @@ def register_routes(app):
     @app.route('/assign_project', methods=['GET', 'POST'])
     @login_required
     def assign_project():
+        if current_user.role_id not in [1, 2, 3]:  # Только те, кто выше сотрудника
+            return redirect(url_for('profile'))
+
         form = AssignProjectForm()
-        form.user_id.choices = [(u.id, u.name) for u in User.query.all()]
+
+        # Только тех, кто ниже по званию
+        form.user_id.choices = [
+            (u.id, u.name) for u in User.query.filter(User.role_id > current_user.role_id).all()
+        ]
         form.project_id.choices = [(p.id, p.title) for p in Project.query.all()]
+
         if form.validate_on_submit():
             relation = UserProject(user_id=form.user_id.data, project_id=form.project_id.data)
             db.session.add(relation)
             db.session.commit()
             return redirect(url_for('projects'))
+
         return render_template('assign_project.html', form=form)
 
     @app.route('/admin/users')
