@@ -110,7 +110,7 @@ def register_routes(app):
     @app.route('/admin/hierarchy', methods=['GET', 'POST'])
     @login_required
     def manage_hierarchy():
-        if current_user.role_id != 1:
+        if not current_user.role_id in  [1, 2, 3 ]:
             return redirect(url_for('profile'))
 
         form = AssignManagerForm()
