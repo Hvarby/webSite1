@@ -29,6 +29,11 @@
             <a href="{{ url_for('admin_logs') }}" class="btn btn-warning">Логи</a>
           {% endif %}
 
+          {% if current_user.role_id == 1 %}
+            <a href="{{ url_for('export_options') }}" class="btn btn-warning">Экспорт</a>
+          {% endif %}
+
+
       </ul>
       <ul class="navbar-nav ms-auto">
         <li class="nav-item"><a class="nav-link btn btn-outline-danger" href="{{ url_for('logout') }}">Выйти</a></li>

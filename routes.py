@@ -1,6 +1,7 @@
-from flask import render_template, redirect, url_for, request, abort
+from flask import render_template, redirect, url_for, request, abort, send_file
 from flask_login import login_user, logout_user, login_required, current_user
-
+from openpyxl import Workbook
+from io import BytesIO
 from forms.admin_edit_form import AdminEditForm
 from models import db
 from models.user import User
@@ -26,7 +27,7 @@ def register_routes(app):
             user = User.query.filter_by(email=form.email.data).first()
             if user and bcrypt.check_password_hash(user.password_hash, form.password.data):
                 login_user(user)
-                log_action("Пользователь вошёл в систему")
+                log_action("Вход в систему")
                 return redirect(url_for('profile'))
             else:
                 error = "Неверный логин или пароль."
@@ -35,8 +36,8 @@ def register_routes(app):
     @app.route('/logout')
     @login_required
     def logout():
+        log_action("Выход из системы")
         logout_user()
-        log_action("Пользователь вышел из системы")
         return redirect(url_for('login'))
 
     @app.route('/register', methods=['GET', 'POST'])
@@ -48,6 +49,7 @@ def register_routes(app):
             db.session.add(user)
             db.session.commit()
             return redirect(url_for('login'))
+            log_action("Пользователь зарегестрирован")
         return render_template('register.html', form=form)
 
     @app.route('/profile')
@@ -70,6 +72,7 @@ def register_routes(app):
                 current_user.password_hash = hashed_pw
 
             db.session.commit()
+            log_action("Изменение данных пользователя")
             return redirect(url_for('profile'))
 
         return render_template('edit_profile.html', form=form)
@@ -87,8 +90,6 @@ def register_routes(app):
             return redirect(url_for('profile'))
 
         form = AssignProjectForm()
-
-        # Только тех, кто ниже по званию
         form.user_id.choices = [
             (u.id, u.name) for u in User.query.filter(User.role_id > current_user.role_id).all()
         ]
@@ -102,15 +103,13 @@ def register_routes(app):
             ).first()
 
             if exists:
-                # Если уже есть — выводим сообщение
                 form.project_id.errors.append('Пользователь уже назначен на этот проект.')
             else:
-                # Если нет — добавляем
                 relation = UserProject(user_id=form.user_id.data, project_id=form.project_id.data)
                 db.session.add(relation)
                 db.session.commit()
+                log_action("Назначил на проект пользователя")
                 return redirect(url_for('assign_project'))
-
         return render_template('assign_project.html', form=form)
 
     @app.route('/users')
@@ -122,9 +121,12 @@ def register_routes(app):
     @app.route('/admin/logs')
     @login_required
     def admin_logs():
-        if current_user.role_id != 1:
-            abort(403)  # Запрет доступа, если пользователь не админ
-        logs = Log.query.order_by(Log.timestamp.desc()).all()
+        if current_user.role_id not in [1, 2, 3]:
+            return redirect(url_for('profile'))
+
+        page = request.args.get('page', 1, type=int)  # текущая страница
+        per_page = 20  # количество логов на одной странице
+        logs = Log.query.order_by(Log.timestamp.desc()).paginate(page=page, per_page=per_page)
         return render_template('admin_logs.html', logs=logs)
 
     @app.route('/admin/hierarchy', methods=['GET', 'POST'])
@@ -141,6 +143,7 @@ def register_routes(app):
             subordinate = User.query.get(form.subordinate_id.data)
             subordinate.manager_id = form.manager_id.data
             db.session.commit()
+            log_action("Назначил руководителя")
             return redirect(url_for('manage_hierarchy'))
 
         users = User.query.filter(User.role_id > 1).all()
@@ -154,20 +157,125 @@ def register_routes(app):
 
         user = User.query.get_or_404(user_id)
         form = AdminEditForm(obj=user)
-
-        # Список ролей
         form.role_id.choices = [(r.id, r.name) for r in Role.query.all()]
 
         if form.validate_on_submit():
             user.name = form.name.data
             user.email = form.email.data
-
-            # Разрешаем менять роль только другим пользователям
             if user.id != current_user.id:
                 user.role_id = form.role_id.data
-
             db.session.commit()
+            log_action("Изменение данных пользователя Админом")
             return redirect(url_for('users'))
-
         return render_template('admin_edit_user.html', form=form, user=user)
+
+    @app.route('/export')
+    @login_required
+    def export_options():
+        if current_user.role_id not in [1, 2, 3]:
+            return redirect(url_for('profile'))
+        return render_template('export.html')
+
+    @app.route('/export/projects')
+    @login_required
+    def export_projects():
+        if current_user.role_id not in [1, 2, 3]:
+            return redirect(url_for('profile'))
+        log_action("Экспорт проектов")
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Проекты"
+
+        ws.append(["Название проекта", "Участник", "Роль", "Руководитель"])
+
+        projects = Project.query.all()
+        for project in projects:
+            user_projects = UserProject.query.filter_by(project_id=project.id).all()
+            if user_projects:
+                for up in user_projects:
+                    user = up.user
+                    ws.append([
+                        project.title,
+                        user.name,
+                        user.role.name,
+                        user.manager.name if user.manager else "Нет руководителя"
+                    ])
+            else:
+                ws.append([project.title, "Нет участников", "", ""])
+
+        # Отправка файла
+        stream = BytesIO()
+        wb.save(stream)
+        stream.seek(0)
+
+        return send_file(
+            stream,
+            as_attachment=True,
+            download_name="projects.xlsx",
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+
+    @app.route('/export/users')
+    @login_required
+    def export_users():
+        if current_user.role_id not in [1, 2, 3]:
+            return redirect(url_for('profile'))
+        log_action("Экспорт пользователей")
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Пользователи"
+
+        ws.append(["Имя", "Email", "Роль", "Руководитель"])
+
+        users = User.query.all()
+        for user in users:
+            ws.append([
+                user.name,
+                user.email,
+                user.role.name,
+                user.manager.name if user.manager else "Нет руководителя"
+            ])
+
+        stream = BytesIO()
+        wb.save(stream)
+        stream.seek(0)
+
+        return send_file(
+            stream,
+            as_attachment=True,
+            download_name="users.xlsx",
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+
+    @app.route('/export/logs')
+    @login_required
+    def export_logs():
+        if current_user.role_id not in [1, 2, 3]:
+            return redirect(url_for('profile'))
+
+        log_action("Экспорт логов")
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Логи"
+        ws.append(["Дата и время", "Пользователь", "Действие"])
+
+        logs = Log.query.order_by(Log.timestamp.desc()).all()
+        for log in logs:
+            ws.append([
+                log.timestamp.strftime('%Y-%m-%d %H:%M:%S'),
+                log.user.name if log.user else "Неизвестно",
+                log.action
+            ])
+
+        stream = BytesIO()
+        wb.save(stream)
+        stream.seek(0)
+
+        return send_file(
+            stream,
+            as_attachment=True,
+            download_name="logs.xlsx",
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+
 

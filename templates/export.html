@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+
+{% block title %}Экспорт данных{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <h2 class="mb-4">Экспорт информации</h2>
+
+    <div class="list-group">
+        <a href="{{ url_for('export_projects') }}" class="list-group-item list-group-item-action">
+            📁 Экспорт по проектам
+        </a>
+        <a href="{{ url_for('export_users') }}" class="list-group-item list-group-item-action">
+            👤 Список всех пользователей
+        </a>
+        <a href="{{ url_for('export_logs') }}" class="list-group-item list-group-item-action">
+            📄 Логи сервера
+        </a>
+    </div>
+</div>
+{% endblock %}

@@ -43,7 +43,7 @@ with app.app_context():
         email='head@example.com',
         password_hash=bcrypt.hashpw('headpass'.encode('utf-8'), bcrypt.gensalt()).decode('utf-8'),
         role_id=3,
-        manager_id=ceo.id  # назначим руководителя позже, после flush
+        manager_id=ceo.id
     )
 
     staff = User(
@@ -51,7 +51,7 @@ with app.app_context():
         email='alexey@example.com',
         password_hash=bcrypt.hashpw('staffpass'.encode('utf-8'), bcrypt.gensalt()).decode('utf-8'),
         role_id=4,
-        manager_id=head.id  # тоже позже
+        manager_id=head.id
     )
 
     db.session.add_all([admin, ceo])
