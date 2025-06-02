@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+
+{% block title %}Сотрудники{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <h2 class="mb-4">Список сотрудников</h2>
+
+    <table class="table table-bordered table-hover bg-white">
+        <thead class="table-light">
+            <tr>
+                <th>Имя</th>
+                <th>Роль</th>
+                <th>Проекты</th>
+                <th>Руководитель</th>
+                {% if current_user.role_id == 1 %}
+                    <th>Действия</th>
+                {% endif %}
+            </tr>
+        </thead>
+        <tbody>
+            {% for user in users %}
+                <tr>
+                    <td>{{ user.name }}</td>
+                    <td>{{ user.role.name }}</td>
+                    <td>
+                        {% if user.user_projects %}
+                            <ul class="mb-0">
+                                {% for up in user.user_projects %}
+                                    <li>{{ up.project.title }}</li>
+                                {% endfor %}
+                            </ul>
+                        {% else %}
+                            <span class="text-muted">Нет проектов</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if user.manager %}
+                            {{ user.manager.name }}
+                        {% else %}
+                            <span class="text-muted">Не назначен</span>
+                        {% endif %}
+                    </td>
+                    {% if current_user.role_id == 1 %}
+                        <td>
+                            {% if current_user.id != user.id %}
+                                <a href="{{ url_for('edit_user_admin', user_id=user.id) }}" class="btn btn-sm btn-warning">Редактировать</a>
+                            {% else %}
+                                <span class="text-muted">Вы</span>
+                            {% endif %}
+                        </td>
+                    {% endif %}
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

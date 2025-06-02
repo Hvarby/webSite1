@@ -1,5 +1,7 @@
 from flask import render_template, redirect, url_for, request, abort
 from flask_login import login_user, logout_user, login_required, current_user
+
+from forms.admin_edit_form import AdminEditForm
 from models import db
 from models.user import User
 from models.project import Project
@@ -34,6 +36,7 @@ def register_routes(app):
     @login_required
     def logout():
         logout_user()
+        log_action("Пользователь вышел из системы")
         return redirect(url_for('login'))
 
     @app.route('/register', methods=['GET', 'POST'])
@@ -56,11 +59,19 @@ def register_routes(app):
     @app.route('/edit_profile', methods=['GET', 'POST'])
     @login_required
     def edit_profile():
-        form = EditProfileForm(name=current_user.name)
+        form = EditProfileForm(email=current_user.email)
+
         if form.validate_on_submit():
-            current_user.name = form.name.data
+            current_user.email = form.email.data
+
+            # Если пользователь ввёл новый пароль — обновляем
+            if form.password.data:
+                hashed_pw = bcrypt.generate_password_hash(form.password.data).decode('utf-8')
+                current_user.password_hash = hashed_pw
+
             db.session.commit()
             return redirect(url_for('profile'))
+
         return render_template('edit_profile.html', form=form)
 
     @app.route('/projects')
@@ -72,7 +83,7 @@ def register_routes(app):
     @app.route('/assign_project', methods=['GET', 'POST'])
     @login_required
     def assign_project():
-        if current_user.role_id not in [1, 2, 3]:  # Только те, кто выше сотрудника
+        if current_user.role_id not in [1, 2, 3]:  # Только выше сотрудника
             return redirect(url_for('profile'))
 
         form = AssignProjectForm()
@@ -84,20 +95,29 @@ def register_routes(app):
         form.project_id.choices = [(p.id, p.title) for p in Project.query.all()]
 
         if form.validate_on_submit():
-            relation = UserProject(user_id=form.user_id.data, project_id=form.project_id.data)
-            db.session.add(relation)
-            db.session.commit()
-            return redirect(url_for('projects'))
+            # Проверяем, есть ли уже такая связь
+            exists = UserProject.query.filter_by(
+                user_id=form.user_id.data,
+                project_id=form.project_id.data
+            ).first()
+
+            if exists:
+                # Если уже есть — выводим сообщение
+                form.project_id.errors.append('Пользователь уже назначен на этот проект.')
+            else:
+                # Если нет — добавляем
+                relation = UserProject(user_id=form.user_id.data, project_id=form.project_id.data)
+                db.session.add(relation)
+                db.session.commit()
+                return redirect(url_for('assign_project'))
 
         return render_template('assign_project.html', form=form)
 
-    @app.route('/admin/users')
+    @app.route('/users')
     @login_required
-    def admin_users():
-        if current_user.role_id != 1:
-            abort(403)  # Запрет доступа, если пользователь не админ
+    def users():
         users = User.query.all()
-        return render_template('admin_users.html', users=users)
+        return render_template('users.html', users=users)
 
     @app.route('/admin/logs')
     @login_required
@@ -125,3 +145,29 @@ def register_routes(app):
 
         users = User.query.filter(User.role_id > 1).all()
         return render_template('hierarchy.html', users=users, form=form)
+
+    @app.route('/admin/edit_user/<int:user_id>', methods=['GET', 'POST'])
+    @login_required
+    def edit_user_admin(user_id):
+        if current_user.role_id != 1:
+            return redirect(url_for('profile'))
+
+        user = User.query.get_or_404(user_id)
+        form = AdminEditForm(obj=user)
+
+        # Список ролей
+        form.role_id.choices = [(r.id, r.name) for r in Role.query.all()]
+
+        if form.validate_on_submit():
+            user.name = form.name.data
+            user.email = form.email.data
+
+            # Разрешаем менять роль только другим пользователям
+            if user.id != current_user.id:
+                user.role_id = form.role_id.data
+
+            db.session.commit()
+            return redirect(url_for('users'))
+
+        return render_template('admin_edit_user.html', form=form, user=user)
+
