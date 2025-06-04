@@ -14,7 +14,6 @@ with app.app_context():
     db.session.query(Project).delete()
     db.session.query(Role).delete()
 
-    # Создание ролей
     roles = [
         Role(id=1, name='Администратор'),
         Role(id=2, name='Генеральный директор'),
@@ -23,7 +22,6 @@ with app.app_context():
     ]
     db.session.add_all(roles)
 
-    # Создание пользователей
     admin = User(
         name='Admin',
         email='admin@example.com',
@@ -55,7 +53,7 @@ with app.app_context():
     )
 
     db.session.add_all([admin, ceo])
-    db.session.flush()  # чтобы у ceo появился ID
+    db.session.flush()
 
     head.manager_id = ceo.id
     db.session.add(head)
@@ -64,16 +62,13 @@ with app.app_context():
     staff.manager_id = head.id
     db.session.add(staff)
 
-    # Добавим проекты
     project1 = Project(title='Сайт компании')
     project2 = Project(title='Мобильное приложение')
     db.session.add_all([project1, project2])
     db.session.flush()
 
-    # Назначим проект сотруднику
     relation = UserProject(user_id=staff.id, project_id=project1.id)
     db.session.add(relation)
-
     db.session.commit()
 
     print("База заполнена начальными данными.")

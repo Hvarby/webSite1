@@ -33,23 +33,16 @@ def register_routes(app):
                 error = "Неверный логин или пароль."
         return render_template('login.html', form=form, error=error)
 
-    @app.route('/logout')
-    @login_required
-    def logout():
-        log_action("Выход из системы")
-        logout_user()
-        return redirect(url_for('login'))
-
     @app.route('/register', methods=['GET', 'POST'])
     def register():
         form = RegisterForm()
         if form.validate_on_submit():
             hashed_pw = bcrypt.generate_password_hash(form.password.data).decode('utf-8')
-            user = User(name=form.name.data, email=form.email.data, password_hash=hashed_pw, role_id=2)
+            user = User(name=form.name.data, email=form.email.data, password_hash=hashed_pw, role_id=4)
             db.session.add(user)
             db.session.commit()
-            return redirect(url_for('login'))
             log_action("Пользователь зарегестрирован")
+            return redirect(url_for('login'))
         return render_template('register.html', form=form)
 
     @app.route('/profile')
@@ -57,6 +50,13 @@ def register_routes(app):
     def profile():
         user_projects = [relation.project for relation in current_user.user_projects]
         return render_template('profile.html', user=current_user, projects=user_projects)
+
+    @app.route('/logout')
+    @login_required
+    def logout():
+        log_action("Выход из системы")
+        logout_user()
+        return redirect(url_for('login'))
 
     @app.route('/edit_profile', methods=['GET', 'POST'])
     @login_required
@@ -277,5 +277,3 @@ def register_routes(app):
             download_name="logs.xlsx",
             mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
-
-
